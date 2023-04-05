@@ -1,0 +1,134 @@
+---
+title: "Avocados and CPI"
+author: "MAJ Rob Lasater"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, messages=F, warning = F)
+library(tidyverse)
+library(lubridate)
+```
+
+## Pre step: Load in the data
+There are five datasets that I am going to use for this example. The first five contains monthly avocado sales information for Atlanta for 2020,21,22, and 23. The second contains bi-monthly CPI data for 2020-2023. 
+
+```{r data load, include = F,results='hide'}
+Avocados_20 <- read_csv("2020-plu-total-hab-data.csv") %>%
+  filter(Geography == "Atlanta") %>%
+  select(Geography, 'Current Year Week Ending', 'Total Bulk and Bags Units')
+Avocados_21 <- read_csv("2021-plu-total-hab-data.csv") %>%
+  filter(Geography == "Atlanta") %>%
+  select(Geography, 'Current Year Week Ending', 'Total Bulk and Bags Units')
+Avocados_22 <- read_csv("2022-plu-total-hab-data.csv") %>%
+  filter(Geography == "Atlanta") %>%
+  select(Geography, 'Current Year Week Ending', 'Total Bulk and Bags Units')
+Avocados_23 <- read_csv("2023-plu-total-hab-data.csv") %>%
+  filter(Geography == "Atlanta") %>%
+  select(Geography, 'Current Year Week Ending', 'Total Bulk and Bags Units')
+Atlanta_CPI <- read_csv("Atlanta_CPI_2022.csv")
+```
+Below are summaries of each years data and CPI for Atlanta.
+```{r Avocados_20}
+summary(Avocados_20)
+```
+```{r Avocados_21}
+summary(Avocados_21)
+```
+```{r Avocados_22}
+summary(Avocados_22)
+```
+```{r Avocados_23}
+summary(Avocados_23)
+```
+```{r Avocados}
+summary(Atlanta_CPI)
+```
+## Step 1: Compile Periodic Average Price of Avocados in Atlanta
+
+We have a research design issue to answer. CPI levels represent a percentage change in prices based off previous years prices for a two month period. Avocado sales data are reporting gross sales estimates based off a 4 week period. We can either:
+1. Aggregate total sales
+2. Average 4 week sales for the period
+3. Use the end of the period value
+
+Since the CPI is given at a specific time and does not aggregate months, using the end value is both the simplest and most proper.
+
+First I am going to append each year to create one dataframe for the gross sales
+```{r Append Data}
+Avocados <- rbind(Avocados_20,Avocados_21, Avocados_22, Avocados_23)
+summary(Avocados)
+```
+
+Then I'll reduce the data to monthly totals
+```{r Summarize Sales, echo=FALSE}
+Avocados <- Avocados %>%
+  group_by(Geography, Month = lubridate::floor_date(`Current Year Week Ending`, 'month')) %>%
+  summarise(Total = sum(`Total Bulk and Bags Units`)) %>%
+  ungroup()
+head(Avocados)
+```
+## Step 2: Join data
+Now that I have end of month totals, I can join it to the CPI data. I only want to keep the values that show up in the CPI table, so I will do a left/right join. Note that the difference between these two is just which table shows up first in the code.
+```{r Join, include=T}
+Atlanta_CPI$Month <- my(Atlanta_CPI$Month)
+Full_data <- left_join(Atlanta_CPI, Avocados)
+```
+The resulting table now has the total avocados sold and CPI in two month increments. Notice that if I had done the reverse, that I would have a bunch of NA's. See below for the differences.
+```{r Incorrect Header, include=T}
+wrong <- right_join(Atlanta_CPI, Avocados) %>%
+  arrange(desc(Month))
+head(wrong)
+```
+```{r Correct Header}
+head(Full_data)
+```
+## Step 3: Plot Data
+
+For this, lets use a line graph to compare the CPI trend to the trend in Avocado sales. In order to make this comparison though, I am going to recode the Avocado sales as change from previous month ((Current Month - Last Month) / Last Month). We also need to change the CPI to a decimal value to ensure they are on the same scale.
+
+```{r Recode}
+Full_data$Pct_Change <- (lag(Full_data$Total)-Full_data$Total)/lag(Full_data$Total)
+Full_data$`All items` <- Full_data$`All items`/100
+```
+
+Now we can plot the line graph
+
+```{r Line Graph}
+Full_data %>%
+  select(Month, `All items`, Pct_Change) %>%
+  pivot_longer(cols = c(`All items`, Pct_Change), names_to = "Metric", values_to = "Change") %>%
+  ggplot(aes(x=Month, y=Change, color=Metric))+
+  geom_line() +
+  scale_color_manual(values = c("Brown", "Green"), labels = c("CPI", "Avocados"))
+```
+Seems all over the map for Avocados, while CPI appears to be fairly smooth. We can now move into some statistical analysis.
+
+## Step 4: Correlation
+
+We can compare correlation of Avocados and CPI since they are both quantitative variables. This will tell us if there is a linear change associated with a change in each variable. We can plot each against each other for a visual representation, and then do a correlation test to get a statistical value.
+
+```{r Dot Plot}
+R <- cor(Full_data$`All items`, Full_data$Total, use = "complete.obs")
+Full_data %>%
+  ggplot(aes(x=`All items`, y=Total)) +
+  geom_point()
+```
+
+Visually it looks like there is some evidence of a relationship. However, we get an R value of `r toString(R)`, which indicates a low level of correlation between CPI and Avocado sales. 
+
+## Linear Regression of Avocado Sales, time, and CPI
+
+We can also do linear regression on the data to see if there the amount of avocados are changing linearly and by how much against time and CPI. Plotting multiple variables gets more complicated to visualize (It would be a warped plane in this instance), so we have to rely on statistical inference exclusively.
+
+```{r Linear Regression}
+model <- Full_data %>%
+  lm(Total ~ Month + `All items`, .)
+
+summary(model)
+```
+This is where things actually get interesting. With very limited data there is a negative association with the total number of Avocados sold and CPI. It is not statistically significant, but this is also too small of a dataset.
+
+## Step 6: Conclusions
+From what we have done there is very little evidence to suggest that CPI is having an impact on the number of Avocados sold in Atlanta. This study is very limited by the sample size that we have. This would need to be expanded to more datapoints, perhaps by including more regions with localized CPI's, smaller time intervals, or a longer time period.
+
