@@ -1,0 +1,17 @@
+# Example Analyses for Data Literacy Course
+
+This gitlab page contains various examples used for Data Literacy. The purpose here is to publish reproducable and updateable code that can be easily accessed within a class. The intent is not to use this to teach, but to pull examples to be used.
+
+## Datasets and Examples
+
+### Avocados
+Avocados contains data and analysis of Avocado sales in Atlanta as well as CPI levels from 2020- March 2023.
+
+The avocado data was pulled from the Hass Avocado Board at: https://hassavocadoboard.com/
+CPI data was obtained from the US Bureau of Labor Statistics at: https://www.bls.gov/regions/southeast/news-release/consumerpriceindex_atlanta.htm
+
+The analysis compares the impact on Avocado sales in Atlanta by changes in the CPI.
+
+### ACFT
+This example updates the RASP example used in Lesson 2 with historical ACFT data obtained from West Point from 2020. It is a fairly small sample, and not the current test. Updating this with more recent data would be great, but this will allow for a better analysis to include logistic regression.
+
